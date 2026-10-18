@@ -1,0 +1,208 @@
+! Title: X (Twitter) Declutter
+! Description: Hides Grok, Premium upsells, and nav entries for Calls, Lists, Communities, Creator Studio, Business, and Ads.
+! Applies to: x.com (Brave, adblock-rust engine; desktop + Android)
+! Last updated: 2026-10-18 (rev 10 - Grok button fixed via logo SVG hooks)
+!
+! HOW TO LOAD IN BRAVE
+!   Desktop: brave://adblock  ->  Custom Filters  ->  Add filter list via URL
+!   Android: address bar -> brave://adblock  ->  Custom Filters -> Add
+!   Paste this file's URL, then enable the toggle. Brave refreshes automatically.
+!
+! ============================================================
+! WHY THE EARLIER REVISIONS FAILED  (read this before editing)
+! ============================================================
+! The nav paths are NOT the ones you would guess from the URL bar.
+! X builds the sidebar from this code (verbatim from its own client bundle):
+!
+!   {label:`Lists`,          to:`/$username/lists`}
+!   {label:`Communities`,    to:`/$username/communities`}
+!   {label:`Creator Studio`, to:`/i/jf/$`, params:{_splat:`creators/studio`}}
+!   {label:`Ads`,            href:`https://ads.x.com/?ref=gl-tw-twitter-ads-rweb`}
+!   {label:`Premium`,        href:`/i/premium_sign_up`}
+!
+! So:
+!   Lists          ->  /<yourhandle>/lists        NOT /i/lists
+!   Communities    ->  /<yourhandle>/communities  NOT /i/communities
+!   Creator Studio ->  /i/jf/creators/studio      NOT studio.x.com, NOT /i/creator-studio
+!   Ads            ->  https://ads.x.com/         (external link)
+!
+! /i/lists and /i/communities DO exist as deep links, but the sidebar does not
+! use them - which is why those rules never hid the nav item.
+!
+! ============================================================
+! RULE FORMAT FACTS
+! ============================================================
+! * NEWLINE-DELIMITED. One rule per line. If a paste collapses the newlines,
+!   the whole list becomes one unparseable line and NOTHING loads.
+!   Subscribe via URL instead of pasting to avoid this entirely.
+! * Filters that fail to parse are silently IGNORED - one bad line does NOT
+!   disable the rest of the list.
+! * :has-text() is a case-insensitive SUBSTRING match.
+! * PREFER DECLARATIVE SELECTORS (href, aria-label, data-slot) OVER
+!   PROCEDURAL ONES (:has-text, :has, :upward). Procedural rules could not
+!   be confirmed to take effect here - see the Business section below.
+!   A rule is only "known good" once the user confirms the item is gone.
+! * :has(...) could not be verified either way. The usual test method
+!   (url_cosmetic_resources / Engine.serialize) is blind to ALL procedural
+!   rules, so a 0 there proves nothing. Do not assert it is unsupported.
+! * :upward() is unreliable in adblock-rust and is not used below.
+! * X removed all data-testid attributes; the design system now uses
+!   data-slot="xds-button" / "xds-menu-trigger". data-testid rules do nothing.
+!
+! ============================================================
+! WHY THE :not([href="..."]) GUARDS EXIST
+! ============================================================
+! @lists, @communities, @calls, @ads and @business are REAL X ACCOUNTS.
+! A plain suffix rule like a[href$="/lists"] also matches the @lists account
+! page link, which would hide links to those accounts in timelines and posts.
+! The :not([href="..."]) guard excludes the bare account path while still
+! matching your own /<handle>/lists sidebar entry. Do not remove the guards.
+!
+! [href^="/"] restricts the match to RELATIVE links, i.e. internal x.com
+! navigation. Without it, an absolute external URL that merely happens to end
+! in /lists is also hidden - e.g. a tweet linking to
+! https://example.com/lists or https://reddit.com/r/communities.
+! X renders its own nav links as relative paths, so this loses nothing.
+
+! ============================================================
+! Lists   -> /<handle>/lists
+! ============================================================
+x.com##a[href^="/"][href$="/lists"]:not([href="/lists"])
+x.com##div[role="button"]:has-text(/^Lists$/)
+
+! ============================================================
+! Communities   -> /<handle>/communities
+! ============================================================
+x.com##a[href^="/"][href$="/communities"]:not([href="/communities"])
+x.com##div[role="button"]:has-text(/^Communities$/)
+
+! ============================================================
+! Creator Studio   -> /i/jf/creators/studio
+! ============================================================
+! a[href*="/creators/studio"] already covers the /i/jf/... form.
+x.com##a[href*="/creators/studio"]
+x.com##div[role="button"]:has-text(/Creator Studio/)
+
+! ============================================================
+! Ads   -> https://ads.x.com/ (external)
+! ============================================================
+x.com##a[href*="ads.x.com"]
+x.com##div[role="button"]:has-text(/^Ads$/)
+
+! ============================================================
+! Business   -> <a href="/i/verified-orgs-signup">
+! ============================================================
+! THE REAL MARKUP (captured from the live logged-in DOM):
+!
+!   <a href="/i/verified-orgs-signup" role="link"
+!      class="css-g5y9jx r-16y2uox r-dnmrzs r-o7ynqc r-6416eg ...">
+!     <div class="css-g5y9jx r-1awozwy r-18u37iz ...">
+!       <div class="css-146c3p1 ...">
+!         <span class="css-1jxf684 ...">Business</span>
+!       </div>
+!     </div>
+!   </a>
+!
+! The row sits inside div[role="dialog"] - i.e. the "More" overflow menu,
+! NOT the main sidebar.
+!
+! WHY EVERY GUESS FAILED - three separate wrong paths:
+!   /i/business            307-redirects to /i/verified. Not the nav target.
+!   /i/premium-business    IS in the nav config (to:`/i/premium-business`)
+!                          and the route table maps /i/verified-orgs-signup
+!                          -> /i/premium-business, but the rendered href is
+!                          NOT this. So a[href*="/i/premium"] never matched.
+!   /i/verified-orgs-signup  <-- the ACTUAL rendered href.
+!
+! The row IS a real <a> (not a button, not a menuitem), so the earlier
+! div[role="button"] reasoning was wrong too. Only the live DOM showed this.
+!
+! This rule is DECLARATIVE and anchored to a stable route, so it survives
+! class-hash rotation and sidebar reordering.
+! ============================================================
+! a[href*="verified-orgs-signup"] is the more robust form: it also matches an
+! absolute URL or one carrying a query string. "verified-orgs-signup" is a
+! unique route, so false-positive risk is effectively nil.
+x.com##a[href*="verified-orgs-signup"]
+
+! Belt-and-braces href rules for the other paths, in case X flips the
+! nav target. These are inert against the current markup.
+x.com##a[href^="/i/business"]
+
+! Positional rule - NO LONGER NEEDED, the href rule above is stable.
+! Kept commented in case X ever drops the href. Brittle: nth-of-type(9)
+! is positional and css-g5y9jx is a rotating emotion class hash.
+! x.com##div.r-18u37iz.r-1awozwy.css-g5y9jx:nth-of-type(9)
+
+! Text-based fallbacks - unverified, may do nothing (see format notes).
+x.com##div[role="button"]:has-text(/Business/)
+x.com##[data-slot="xds-menu-trigger"]:has-text(/Business/)
+
+! ============================================================
+! Calls   -> /i/calls
+! ============================================================
+x.com##a[href^="/i/calls"]
+x.com##div[role="button"]:has-text(/^Calls$/)
+
+! ============================================================
+! Grok
+! ============================================================
+! Grok UI appears with at least two different labels, so no single
+! exact-match rule covers it:
+!
+!   profile header  <button aria-label="Grok" data-slot="xds-button">
+!                   (desktop only - its container is "sm:flex hidden")
+!   per-post        <button aria-label="Grok actions">
+!   sidebar         <a href="/i/grok" aria-label="Grok">
+!
+! The profile header sits at top-right, immediately left of the Search
+! button, and only exists on /<handle> pages - not on /home.
+!
+! [aria-label*="Grok" i] is the load-bearing rule: one substring match
+! covers "Grok" and "Grok actions" alike, and survives X rewording the
+! label again. The two exact rules are kept only as explicit intent.
+!
+! The Grok logo SVG has a stable hook: viewBox="0 0 33 32".
+! Every other X icon is 24x24, and a profile page contains exactly
+! one 33x32 svg, so this is specific to Grok. Unlike data-icon
+! (dropped at hydration) viewBox survives, so it works on live DOM.
+!
+! svg[viewBox] hides the icon; the rule below hides the button
+! around it, so no empty button is left behind. :has() is procedural,
+! supported by Brave 1.73+ (adblock-rust). The Python binding cannot
+! parse procedural rules, so it reports 0 selectors for them - that is
+! a limitation of the test tool, not evidence the rule is dead.
+! ============================================================
+x.com##button[aria-label="Grok"]
+x.com##button[aria-label="Grok actions"]
+x.com##[aria-label*="Grok" i]
+x.com##a[href^="/i/grok"]
+x.com##svg[viewBox="0 0 33 32"]
+x.com##button:has(svg[viewBox="0 0 33 32"])
+x.com##div[role="button"]:has(svg[viewBox="0 0 33 32"])
+
+! Fallback: the logo's own path data. viewBox is a layout attribute X
+! could change while the artwork stays the same, so this covers that.
+! 24-char prefix is enough; the full d is 557 chars and unique on X.
+x.com##path[d*="M12.745 20.54"]
+
+! ============================================================
+! Premium / Subscribe
+! ============================================================
+! a[href*="/i/premium"] covers /i/premium, /i/premium_sign_up,
+! /i/premium-business etc. /i/verified-choose is a DIFFERENT path and is
+! NOT covered, so it needs its own rule.
+x.com##a[href*="/i/premium"]
+x.com##a[href*="/i/verified-choose"]
+x.com##div[role="button"]:has-text(/^Subscribe$/)
+
+! ============================================================
+! REMOVED - these matched nothing in the real client code
+! ============================================================
+! x.com##a[href^="/i/lists"]           (sidebar uses /handle/lists)
+! x.com##a[href^="/i/communities"]     (sidebar uses /handle/communities)
+! x.com##a[href*="studio.x.com"]       (nav uses /i/jf/creators/studio)
+! x.com##a[href^="/i/ads"]             (route does not exist)
+! x.com##a[href^="/i/ads_manager"]     (route does not exist)
+! x.com##a[href^="/i/creator-studio"]  (route does not exist)
+! x.com##a[href^="/i/creator_studio"]  (route does not exist)

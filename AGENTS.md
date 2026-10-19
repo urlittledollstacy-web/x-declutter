@@ -445,11 +445,24 @@ Do not assume one:
 2. **Never trust a scraped logged-out page to represent a logged-in client.**
    Two rules were written and shipped against markup the user never receives.
    Ask for devtools output *early* on a stubborn element, not after three tries.
-3. **adblock-rust silently drops `:has()` rules.** Verified: `svg:has(path[...])`
-   yields `hide=[]`, while `path[d^="M21.742"]` yields the selector. A `:has()`
-   rule looks valid but does nothing. Note this is *different* from the
-   "procedural rules are invisible to the test API" caveat above — here the rule
-   is dropped by the engine, not merely hidden from the probe.
+3. **`:has()` was NOT verified either way. Do not claim it is dropped.**
+   An earlier version of this note asserted "adblock-rust silently drops `:has()`
+   rules", citing `svg:has(path[...]) -> hide=[]` versus
+   `path[d^="M21.742"] -> [selector]`. That reasoning was **wrong**: the probe
+   returns `[]` for *every* procedural form, so `[]` proves nothing. Measured:
+
+   | rule | `hide_selectors` |
+   |---|---|
+   | `div.plain-rule` | `['div.plain-rule']` |
+   | `div[role="button"]:has-text(/^Lists$/)` | `[]` |
+   | `button:has(svg[viewBox="0 0 33 32"])` | `[]` |
+   | `a:has-text(Calls):upward(1)` | `[]` |
+
+   `:has()` and `:has-text()` are indistinguishable under this probe. Whether
+   the engine *keeps* or *drops* them is unknown. The `path[d^=...]` rule was
+   chosen because it is **declarative**, not because `:has()` was proven dead.
+   Only the user's on-device report can settle it. This is the same mistake the
+   project made twice before (see "Corrected claims" above) - do not repeat it.
 4. Five of the user's picker classes (`r-lwhw9o`, `r-16y2uox`, `r-1nao33i`,
    `r-m6rgpd`, `r-bnwqim`) appear in **none** of the scraped markup. That was the
    early signal that the DOMs differed, and it was available before rev 14.

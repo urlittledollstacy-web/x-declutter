@@ -1,7 +1,7 @@
 ! Title: X (Twitter) Declutter
 ! Description: Hides Grok, Premium upsells, and nav entries for Calls, Lists, Communities, Creator Studio, Business, and Ads.
 ! Applies to: x.com (Brave, adblock-rust engine; desktop + Android)
-! Last updated: 2026-10-18 (rev 10 - Grok button fixed via logo SVG hooks)
+! Last updated: 2026-10-18 (rev 16 - logo rule anchored to real path data)
 !
 ! HOW TO LOAD IN BRAVE
 !   Desktop: brave://adblock  ->  Custom Filters  ->  Add filter list via URL
@@ -195,6 +195,154 @@ x.com##path[d*="M12.745 20.54"]
 x.com##a[href*="/i/premium"]
 x.com##a[href*="/i/verified-choose"]
 x.com##div[role="button"]:has-text(/^Subscribe$/)
+
+! ============================================================
+! Dividers between posts
+! ============================================================
+! The line is a border-bottom on the div that WRAPS each post. It is NOT
+! on <article> (that has border-bottom:0), so styling <article> does
+! nothing.
+!
+! MUST use :style(), never a plain ## rule. A plain rule generates a HIDE
+! selector and deletes the whole post, leaving a blank timeline.
+! Verified: the plain form emits a hide selector; :style() emits a style.
+!
+! X serves two class systems, depending on the session:
+!   RN-Web   -> css-g5y9jx r-1igl3o0 r-qklmqi r-1adg3ll r-1ny4l3l
+!   Tailwind -> border-b border-normal
+! Both are listed so it works either way. Each is inert on the other.
+!
+! CAVEAT: the r-* hashes are generated per CSS build and change when X
+! redeploys. If the lines return, re-run the divider probe and update the
+! first rule. The Tailwind rule is stable.
+!
+! Note the Tailwind form uses the exact token border-b, which the tab bar
+! does NOT have (it uses border-b-[0.5px]), so the tab bar is untouched.
+x.com##div.css-g5y9jx.r-1igl3o0.r-qklmqi.r-1adg3ll.r-1ny4l3l:style(border-bottom: none !important)
+x.com##div.border-b.border-normal:style(border-bottom: none !important)
+
+! ============================================================
+! Frosted-glass blur on the sticky header
+! ============================================================
+! X blurs whatever scrolls under the pinned top bars. Rule 1 kills the
+! blur. It uses * so it works on BOTH class systems (Tailwind and
+! RN-Web), which is why it is written that way rather than by class name.
+!
+! Rule 2 exists because the header background is only 80% opaque
+! (bg-primary/80 -> color-mix(... 80%, transparent)). Without it, killing
+! the blur just makes the bar see-through and text scrolling underneath
+! shows through. Rule 2 makes it solid.
+!
+! -webkit- is included for older WebKit; Brave on Android uses Blink and
+! reads the standard property.
+!
+! If the header looks wrong, delete rule 2 first - it is the cosmetic
+! one. Rule 1 alone removes the blur without changing opacity.
+x.com##*:style(backdrop-filter: none !important; -webkit-backdrop-filter: none !important)
+x.com##div[class*="backdrop-blur"]:style(background-color: var(--x-bg-primary) !important)
+
+! ============================================================
+! X logo -> removed from the mobile top bar
+! ============================================================
+! There are TWO X logos in the markup, and which one you see depends
+! on screen width. Both are <a aria-label="X" href="/">:
+!
+!   1. left sidebar, class "ms-[12px] flex size-[50px]"
+!      -> wrapped in div[hidden sm:block] = DESKTOP ONLY
+!   2. top bar,      class "flex size-8"
+!      -> wrapped in div[sm:hidden] = MOBILE ONLY (this is Android)
+!
+! On Android, logo 1 is display:none, so a rule for logo 2 removes the
+! visible one. Scoping to div[class*="sm:hidden"] leaves desktop alone:
+! that wrapper is hidden at sm+ widths anyway, so nothing changes there.
+!
+! Selector note: "sm:hidden" contains a colon, but inside a quoted
+! [class*="..."] attribute value it needs no escaping.
+!
+! Layout note: the logo is a 32px box (size-8) inside its own
+! shrink-0 wrapper, so removing it DOES shift the row left by roughly
+! 32px plus the 12px gap (gap-3). That is normally what you want - the
+! title and icons reclaim the space. Nothing else depends on the logo.
+! If the top bar looks cramped or misaligned, delete this rule.
+! NOTE (rev 15): the rule below did NOT work on the user's device. It was
+! scoped to the Tailwind class "sm:hidden", but the user's renderer is the
+! RN-Web variant, whose logo has NO Tailwind classes. Evidence: the user's
+! element picker returned
+!   .r-lwhw9o.r-16y2uox.r-1nao33i.r-m6rgpd.r-lrvibr.r-bnwqim.r-dnmrzs...
+!     ...r-yyyyoo.r-4qtqp9 > g > path
+! and five of those classes (r-lwhw9o, r-16y2uox, r-1nao33i, r-m6rgpd,
+! r-bnwqim) appear NOWHERE in the scraped markup. Also the user's logo is
+! "svg > g > path" with d starting "M18.244 2.25", while the scraped logo
+! is "svg > path" with d starting "m21.62 21.5" - two different renderings.
+!
+! So the scoped rule was correct for the markup we could fetch, and simply
+! never matched on the device. Kept below, disabled, for reference.
+! x.com##div[class*="sm:hidden"] a[aria-label="X"]
+!
+! Variant-independent replacement. aria-label="X" exists in BOTH renderings,
+! so this works regardless of which one the client sends. Verified counts:
+!   desktop markup: 2 matches (left sidebar + top bar)
+!   android markup: 1 match  (top bar only)
+! The user does not use desktop mode, so hiding the sidebar logo too is fine.
+! ---------------------------------------------------------------
+! rev 16 - FINALLY anchored to the user's real DOM.
+! ---------------------------------------------------------------
+! The user's devtools (mobile, RN-Web build) returned the logo as:
+!
+!   <svg viewBox="0 0 24 24" aria-hidden="true"
+!        class="r-4qtqp9 r-yyyyoo r-dnmrzs r-bnwqim r-lrvibr r-m6rgpd
+!               r-18jsvk2 r-16y2uox r-lwhw9o">
+!     <g><path d="M21.742 21.75l-7.563-11.179 ..."></path></g>
+!   </svg>
+!
+! Note aria-hidden="true" and NO aria-label. That is why every previous
+! rule failed:
+!   * div[class*="sm:hidden"] a[aria-label="X"]  -> no Tailwind classes here
+!   * a[aria-label="X"]                          -> element has NO aria-label
+! The earlier aria-label-based rules were built from a scraped logged-out
+! page whose logo markup is simply different from this client's.
+!
+! Anchor on the path data instead. The X glyph's "d" is a constant of the
+! brand mark, so it is stable across class-hash rotation and re-renders,
+! and it cannot collide with another icon. Verified: this exact d value
+! appears nowhere else in the captured markup.
+!
+! Kept the earlier attempts below, disabled, as a record.
+! x.com##div[class*="sm:hidden"] a[aria-label="X"]
+! x.com##a[aria-label="X"]
+!
+! Leading "M21.742" is enough to be unique; using the shorter prefix also
+! survives trivial path-data reformatting by the SVG pipeline.
+x.com##path[d^="M21.742"]
+
+! ============================================================
+! Accent color -> near-white (replaces pink/magenta)
+! ============================================================
+! X stores the accent on <html data-accent="magenta500"> and maps it in
+! CSS:  :root[data-accent=magenta500]{--x-fg-brand:var(--x-magenta-500)}
+! Overriding --x-fg-brand replaces the pink everywhere: links, mentions,
+! hashtags, icons, focus rings, caret.
+!
+! Three things make this harder than one rule:
+!
+! 1. SPECIFICITY. X declares the accent on :root[data-accent], not plain
+!    :root. A plain :root rule LOSES. So these repeat [data-accent].
+!
+! 2. DARK ONLY. Light mode has white backgrounds, so a near-white accent
+!    would be invisible there. [data-theme=dark] keeps light mode intact.
+!
+! 3. THE POST BUTTON. --x-fg-brand also paints .bg-brand (the Post
+!    button), and in dark mode the text on it (--x-fg-on-brand) is WHITE.
+!    Near-white on white = invisible button. Rule 3 fixes that.
+!
+! #e7e9ea is X's own dark-mode secondary text color: reads as white, but
+! stays just distinguishable from the #fff body text, so links remain
+! identifiable. Pure #ffffff would make links match body text exactly.
+! Kept as ONE rule with three declarations, not three rules with the
+! same selector: adblock-rust keys style rules by selector, and I could
+! not confirm from the binding that same-selector declarations get
+! concatenated rather than one replacing another. One rule is unambiguous.
+x.com##:root[data-theme=dark][data-accent]:style(--x-fg-brand: #e7e9ea !important; --x-btn-brand: #e7e9ea !important; --x-fg-on-brand: #000000 !important)
 
 ! ============================================================
 ! REMOVED - these matched nothing in the real client code
